@@ -132,21 +132,23 @@ const saveNewGeneration = async (user, generatedContent, transcribedText) => {
   }
 };
   // Function to handle audio file selection
-  const handleFileChange = (event) => {
-    const file = event.target.files[0];
-    if (file && file.type.startsWith('audio/')) {
-      setAudioFile(file);
-      setError('');
-      setYoutubeLink('');
-      setYoutubeVideoId('');
-      setYoutubeThumbnail('');
-      setTranscribedText('');
-      setGeneratedContent({ blog: '', linkedin: '', newsletter: '', twitter: '', linkedinImage: null, twitterImage: null });
-    } else {
-      setAudioFile(null);
-      setError('Please upload a valid audio file.');
-    }
-  };
+ const handleFileChange = (event) => {
+  const file = event.target.files[0];
+  if (file) { // Removed the 'audio/' check to allow all file types
+    setAudioFile(file); // 'audioFile' state can now hold any file type
+    setError('');
+    // Clear YouTube related states as a file is now selected
+    setYoutubeLink('');
+    setYoutubeVideoId('');
+    setYoutubeThumbnail('');
+    // Clear transcription/generation related states for a fresh start
+    setTranscribedText('');
+    setGeneratedContent({ blog: '', linkedin: '', newsletter: '', twitter: '', linkedinImage: null, twitterImage: null, documentText: '' });
+  } else {
+    setAudioFile(null);
+    setError('Please select a file.'); // Updated error message
+  }
+};
 
   // Function to remove selected audio file
   const handleRemoveAudioFile = () => {
@@ -194,67 +196,110 @@ const saveNewGeneration = async (user, generatedContent, transcribedText) => {
   };
 
   // Function to handle transcription API call
-  const handleTranscribe = async () => {
+ const handleTranscribe = async () => {
+    // Ensure either a file is uploaded or a YouTube link is provided
     if (!audioFile && !youtubeLink) {
-      setError('Please upload an audio file or provide a YouTube link.');
-      return;
+        setError('Please upload a file or provide a YouTube link.');
+        return;
     }
 
+    // Reset states for a new processing attempt
     setIsTranscribing(true);
     setError('');
     setTranscribedText('');
-    setGeneratedContent({ blog: '', linkedin: '', newsletter: '', twitter: '', linkedinImage: null, twitterImage: null });
+    // Initialize generated content, including a new 'documentText' field for text/PDF outputs
+    // This ensures documentText is always available for potential updates
+    setGeneratedContent({ blog: '', linkedin: '', newsletter: '', twitter: '', linkedinImage: null, twitterImage: null, documentText: '' });
 
     const newUploadId = Date.now().toString();
     let uploadName = '';
     let uploadType = '';
-    const formData = new FormData();
+    let targetEndpoint = '';
+    const formData = new FormData(); // FormData is used to send file data
 
+    // --- Determine Upload Type and Endpoint ---
     if (audioFile) {
-      uploadName = audioFile.name;
-      uploadType = 'file';
-      formData.append('file', audioFile);
+        uploadName = audioFile.name;
+        const fileType = audioFile.type; // Get the MIME type of the uploaded file
+
+        // Check if the file is a PDF or a plain text file
+        if (fileType === 'application/pdf' || fileType.startsWith('text/')) {
+            uploadType = 'document';
+            targetEndpoint = `${BACKEND_URL}/api/process-document`; // Endpoint for document processing
+            formData.append('file', audioFile); // Append the file under the 'file' key
+        }
+        // Check if the file is an audio file
+        else if (fileType.startsWith('audio/')) {
+            uploadType = 'audio';
+            targetEndpoint = `${BACKEND_URL}/api/transcribe`; // Endpoint for audio transcription
+            formData.append('file', audioFile); // Append the file under the 'file' key
+        }
+        // Handle unsupported file types if it's not audio, PDF, or text
+        else {
+            setError('Unsupported file type. Please upload audio, PDF, or text files.');
+            setIsTranscribing(false);
+            // Immediately update the status in recent uploads to 'Failed' for unsupported types
+            setRecentUploads(prev => [{ id: newUploadId, name: uploadName, type: 'unsupported', status: 'Failed' }, ...prev].slice(0, 5));
+            return; // Exit the function as the file type is not supported
+        }
     } else if (youtubeLink) {
-      const videoIdMatch = youtubeLink.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
-      uploadName = videoIdMatch ? `YouTube Video (ID: ${videoIdMatch[1].substring(0, 7)}...)` : `YouTube Link: ${youtubeLink.substring(0, 20)}...`;
-      uploadType = 'youtube';
-      formData.append('youtube_url', youtubeLink);
+        // As per previous function logic: YouTube links always go to transcribe endpoint
+        const videoIdMatch = youtubeLink.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/);
+        uploadName = videoIdMatch ? `YouTube Video (ID: ${videoIdMatch[1].substring(0, 7)}...)` : `YouTube Link: ${youtubeLink.substring(0, 20)}...`;
+        uploadType = 'youtube';
+        targetEndpoint = `${BACKEND_URL}/api/transcribe`; // YouTube links use the transcription endpoint
+        formData.append('youtube_url', youtubeLink); // Append the YouTube URL
     }
 
-    // Add to recent uploads with 'Transcribing' status
-    setRecentUploads(prev => [{ id: newUploadId, name: uploadName, type: uploadType, status: 'Transcribing' }, ...prev].slice(0, 5));
+    // Add the current upload to the recent uploads list with a 'Processing' status
+    setRecentUploads(prev => [{ id: newUploadId, name: uploadName, type: uploadType, status: 'Processing' }, ...prev].slice(0, 5));
 
     try {
-      const res = await fetch(`${BACKEND_URL}/api/transcribe`, {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
+        // Make the API call to the determined endpoint
+        const res = await fetch(targetEndpoint, {
+            method: "POST",
+            body: formData,
+            credentials: "include", // Ensure cookies/authentication headers are sent
+        });
 
-      const data = await res.json();
+        const data = await res.json();
+       // Parse the JSON response
 
-      if (res.ok) {
-        setTranscribedText(data.transcript);
-        setRecentUploads(prev => prev.map(upload =>
-          upload.id === newUploadId ? { ...upload, status: 'Processed' } : upload
-        ));
-      } else {
-        setError(data.error || 'Failed to transcribe audio/video.');
-        setRecentUploads(prev => prev.map(upload =>
-          upload.id === newUploadId ? { ...upload, status: 'Failed' } : upload
-        ));
-      }
+        if (res.ok) {
+            // Update state based on the specific upload type and expected response
+            if (uploadType === 'audio' || uploadType === 'youtube') {
+                setTranscribedText(data.transcript); // Store the transcript for audio/YouTube
+            } else if (uploadType === 'document') {
+                // For documents, save the processed content to the 'documentText' field
+                setGeneratedContent(prev => ({ ...prev, documentText: data.processedContent}));
+                setTranscribedText(data.processedContent);
+            }
+
+            // Update the status of the current upload to 'Processed'
+            setRecentUploads(prev => prev.map(upload =>
+                upload.id === newUploadId ? { ...upload, status: 'Processed' } : upload
+            ));
+        } else {
+            // If the response is not OK, set an error message and update status to 'Failed'
+            setError(data.error || `Failed to process ${uploadType}.`);
+            setRecentUploads(prev => prev.map(upload =>
+                upload.id === newUploadId ? { ...upload, status: 'Failed' } : upload
+            ));
+        }
 
     } catch (err) {
-      setError('An error occurred during transcription. Check backend connection.');
-      console.error('Transcription error:', err);
-      setRecentUploads(prev => prev.map(upload =>
-          upload.id === newUploadId ? { ...upload, status: 'Failed' } : upload
+        // Catch network or other unexpected errors
+        setError(`An error occurred during ${uploadType} processing. Please check your internet connection or try again.`);
+        console.error(`${uploadType} processing error:`, err);
+        setRecentUploads(prev => prev.map(upload =>
+            upload.id === newUploadId ? { ...upload, status: 'Failed' } : upload
         ));
     } finally {
-      setIsTranscribing(false);
+        // Always set transcribing status to false once the operation is complete
+        setIsTranscribing(false);
     }
-  };
+};
+
 
   // Function to generate content using Flask backend
   const handleGenerateContent = async () => {

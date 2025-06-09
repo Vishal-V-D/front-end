@@ -4,7 +4,7 @@ import {
   auth,
   provider,
   db,
-} from '../firebase';
+} from '../firebase.js'; // Added .js extension to the import path
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -78,6 +78,7 @@ export function AuthProvider({ children }) {
   }
 
   // Email Signup
+  // The 'name' parameter is added here. If the UserAuth component doesn't send it, it will be undefined and stored as null.
   async function signup(email, password, role) {
     setError('');
     setLoading(true);
@@ -85,10 +86,11 @@ export function AuthProvider({ children }) {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         approved: false,
+        createdAt: new Date(), // Timestamp for creation
         email,
         role,
         status: 'pending',
-        createdAt: new Date(),
+        name: null, // For email/password signups, name is initially null as not collected in UI
       });
       setPendingApproval(true);
       setCurrentUser(null);
@@ -108,16 +110,19 @@ export function AuthProvider({ children }) {
       const userDoc = await getDoc(doc(db, 'users', user.uid));
 
       if (!userDoc.exists()) {
+        // New Google user registration
         await setDoc(doc(db, 'users', user.uid), {
-          email: user.email,
-          role: 'Listener',
-          status: 'pending',
-          createdAt: new Date(),
           approved: false,
+          createdAt: new Date(), // Timestamp for creation
+          email: user.email,
+          role: 'Editor', // Default role for Google sign-ups
+          status: 'pending',
+          name: user.displayName || null, // Use Google display name, or null if not available
         });
         setPendingApproval(true);
         setCurrentUser(null);
       } else {
+        // Existing Google user login
         const data = userDoc.data();
         if (data.approved === true && data.status === 'approved') {
           setPendingApproval(false);
@@ -170,17 +175,26 @@ export function AuthProvider({ children }) {
               setPendingApproval(false);
               setError('');
             } else if (data.status !== 'approved' || data.approved === false) {
+              // If status is not approved or 'approved' flag is false, treat as pending/rejected
               setPendingApproval(true);
-              setCurrentUser(null);
-              setError('Your registration was rejected.');
-              signOut(auth).then(() => {
-                navigate('/login');
-              });
+              setCurrentUser(null); // Clear current user to prevent access
+              // Only sign out and navigate if the status is explicitly 'rejected' or 'revoked'
+              // to prevent logout loops if it's genuinely just 'pending'.
+              if (data.status === 'rejected' || data.status === 'revoked') {
+                setError('Your account status requires attention. Please contact support.');
+                signOut(auth).then(() => {
+                  navigate('/login'); // Redirect to login after explicit rejection/revocation
+                });
+              } else {
+                setError('Your account is pending approval.'); // Generic message for pending
+              }
             } else {
+              // Fallback for any other unexpected state
               setPendingApproval(true);
               setCurrentUser(null);
             }
           } else {
+            // If user document doesn't exist for an authenticated user, it's pending approval
             setPendingApproval(true);
             setCurrentUser(null);
           }
@@ -197,7 +211,7 @@ export function AuthProvider({ children }) {
       if (unsubscribeUserDoc) unsubscribeUserDoc();
       unsubscribeAuth();
     };
-  }, []);
+  }, [navigate]); // Added navigate to dependency array for useEffect safety
 
   const value = {
     currentUser,
