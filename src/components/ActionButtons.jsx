@@ -10,7 +10,7 @@ const ActionButtons = ({ handleTranscribe, isTranscribing, isLoading, audioFile,
         disabled={isTranscribing || isLoading || (!audioFile && !youtubeLink)}
         loading={isTranscribing}
         icon={FileText}
-        text="Transcribe Audio/Video"
+        text="Transcribe / Summarize File"
         loadingText="Transcribing..."
         className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white animate-bounce-in"
       />

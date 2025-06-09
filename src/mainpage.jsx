@@ -71,7 +71,8 @@ const Mainpage = () => {
   const [isSidebarHovered, setIsSidebarHovered] = useState(false);
   const [isSidebarLockedOpen, setIsSidebarLockedOpen] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-
+const [blogPostLoading, setBlogPostLoading] = useState(false);
+  const [blogMessage, setBlogPostMessage] = useState('');
   // Derived state for actual desktop sidebar expansion
   const isSidebarExpanded = isSidebarLockedOpen || (isSidebarHovered && !isSidebarLockedOpen); //
 const [newsletterPostLoading, setNewsletterPostLoading] = useState(false);
@@ -397,7 +398,54 @@ const saveNewGeneration = async (user, generatedContent, transcribedText) => {
     console.log("User logged out!");
     alert("Logged out successfully!");
   };
+const [blogPostUrl, setBlogPostUrl] = useState('');
 
+const handlePostBlog = async (contentToPost, titleToPost, tagsToPost) => {
+  setBlogPostLoading(true);
+  setBlogPostMessage('');
+  setBlogPostUrl('');
+
+  try {
+    const response = await fetch(
+      `${BACKEND_URL}/api/post-blog`,           // ← back-ticks added
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: contentToPost,
+          title: titleToPost,
+          tags: tagsToPost,
+        }),
+      }
+    );
+
+    const data = await response.json();
+
+    if (response.ok) {
+      setBlogPostMessage(data.message || 'Blog posted successfully!');
+      setBlogPostUrl(data.url || '');
+      addNotification(data.message || 'Blog posted successfully!', 'success');
+      console.log('Blog post response:', data);
+    } else {
+      setBlogPostMessage(data.error || 'Failed to post blog');
+      setBlogPostUrl('');
+      addNotification(data.error || 'Failed to post blog', 'error');
+      console.error(`Error posting blog: ${data.error || 'Unknown error'}`); // ← back-ticks added
+    }
+  } catch (err) {
+    console.error('Error posting blog:', err);
+    setBlogPostMessage('Network error or server unreachable during blog post.');
+    setBlogPostUrl('');
+    addNotification(
+      'Network error or server unreachable during blog post.',
+      'error'
+    );
+  } finally {
+    setBlogPostLoading(false);
+  }
+};
+
+  
 const handlePostNewsletter = async (newsletterContent) => {
   setNewsletterPostLoading(true); // Use newsletter-specific loading state
   setNewsletterPostMessage(''); // Clear previous message
@@ -663,8 +711,8 @@ const handlePostNewsletter = async (newsletterContent) => {
                   </button>
                 </div>
 
-                {activeTab === 'blog' && generatedContent.blog && (
-                  <BlogDisplay content={generatedContent.blog} onCopy={copyToClipboard} copiedSection={copiedSection} onSave={handleSaveEditedContent} />
+               {activeTab === 'blog' && generatedContent.blog && (
+                  <BlogDisplay content={generatedContent.blog} onCopy={copyToClipboard} copiedSection={copiedSection} onSave={handleSaveEditedContent} onPost={handlePostBlog} isLoading={blogPostLoading} message={blogMessage}blogUrl={blogPostUrl} />
                 )}
                 {activeTab === 'linkedin' && generatedContent.linkedin && (
                   <LinkedInDisplay content={generatedContent.linkedin} onCopy={copyToClipboard} copiedSection={copiedSection} onSave={handleSaveEditedContent} linkedinImage={generatedContent.linkedinImage} />

@@ -4,7 +4,7 @@ import LinkedInDisplay from './LinkedInDisplay';
 import NewsletterDisplay from './NewsletterDisplay';
 import TwitterDisplay from './TwitterDisplay'; // Ensure correct path if needed
 
-const GeneratedContentOverview = ({ generatedContent, activeTab, onCopy, copiedSection, onSave, onPost, isLoading, message, onLogin })  => {
+const GeneratedContentOverview = ({ generatedContent, activeTab, onCopy, copiedSection, onSave, onPost, isLoading, message, handlePostBlog, blogPostLoading, blogMessage, onLogin }) => {
   // Internal state to manage which content type is currently displayed
   const [activeSubTab, setActiveSubTab] = useState('blog');
 
@@ -72,7 +72,7 @@ const GeneratedContentOverview = ({ generatedContent, activeTab, onCopy, copiedS
 
       {/* Render content based on active sub-tab */}
       {activeSubTab === 'blog' && generatedContent.blog && (
-        <BlogDisplay content={generatedContent.blog} onCopy={onCopy} copiedSection={copiedSection} onSave={onSave} />
+        <BlogDisplay content={generatedContent.blog} onCopy={onCopy} copiedSection={copiedSection} onSave={onSave} onPost={handlePostBlog} isLoading={blogPostLoading} message={blogMessage}  />
       )}
       {activeSubTab === 'linkedin' && generatedContent.linkedin && (
         <LinkedInDisplay content={generatedContent.linkedin} onCopy={onCopy} copiedSection={copiedSection} onSave={onSave} linkedinImage={generatedContent.linkedinImage} />

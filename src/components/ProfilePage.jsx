@@ -6,8 +6,8 @@ import { db } from '../firebase'; // Adjust if your Firebase file is in a differ
 
 const ProfilePage = () => {
   const auth = getAuth();
-
-  const [userName, setUserName] = useState('John Doe');
+ const user = auth.currentUser;
+  const [userName, setUserName] = useState(user ? user.displayName || 'Add Name' : 'Add Name');
   const [userEmail, setUserEmail] = useState('');
   const [loadingUserData, setLoadingUserData] = useState(true);
   const [membership, setMembership] = useState('Premium User');
@@ -23,6 +23,7 @@ const ProfilePage = () => {
     const fetchUserEmail = async () => {
       try {
         const user = auth.currentUser;
+        setUserName(user ? user.displayName || 'John Doe' : 'John Doe');
         if (user) {
           const userDocRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userDocRef);
