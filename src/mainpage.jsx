@@ -28,7 +28,7 @@ import GeneratedContentOverview from './components/GeneratedContentOverview';
 const Mainpage = () => {
   // Define the backend URL here as a single variable
   // IMPORTANT: Remember to update this with your active ngrok URL or deployment URL!
-  const BACKEND_URL = "http://127.0.0.1:5050";
+  const BACKEND_URL = "https://cbd771a9-8a90-492b-855e-76e51b2d93f8-00-1md33tii09z8y.pike.replit.dev";
   const notificationIdRef = useRef(0); // For unique notification IDs
   const [notifications, setNotifications] = useState([]); // State for notifications
 
